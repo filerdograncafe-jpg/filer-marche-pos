@@ -37,7 +37,16 @@ function localDateKey(d = new Date()) {
   bindUI();
   renderAll();
   updateNet();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+    // 新しいバージョンが届いたら、会計中でなければ自動で読み込み直す（データは消えません）
+    let hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) { hadController = true; return; }
+      const busy = state.cart.size > 0 || !$('#checkout').hidden || !$('#dialog').hidden;
+      if (!busy) location.reload(); else toast('新しいバージョンがあります。会計後にアプリを開き直してください');
+    });
+  }
 })();
 
 async function reload() {
@@ -49,7 +58,9 @@ async function reload() {
 async function reloadStock() {
   state.stock = state.event ? stockFromMoves(await DB.movesFor(state.event.id)) : {};
 }
-const productById = (id) => state.products.find((p) => p.id === id);
+// 手入力の商品（その会計だけで使う一時的な商品）
+state.tempProducts = [];
+const productById = (id) => state.products.find((p) => p.id === id) || state.tempProducts.find((p) => p.id === id);
 const stockOf = (id) => state.stock[id] && state.stock[id].managed ? state.stock[id] : null;
 // カートに入っている分を差し引いた「あと何個入れられるか」（在庫管理していない商品は無制限）
 function addable(id) {
@@ -329,6 +340,7 @@ function bindUI() {
   $('#stockCsvBtn').addEventListener('click', stockCsv);
   $('#restoreFile').addEventListener('change', restore);
 
+  $('#manualBtn').addEventListener('click', manualItem);
   $('#addProductBtn').addEventListener('click', () => editProduct(null));
   $('#productAdminList').addEventListener('click', (e) => {
     const b = e.target.closest('[data-edit]'); if (b) editProduct(b.dataset.edit);
@@ -371,7 +383,7 @@ async function confirmSale() {
   try {
     const r = await DB.commitSale(sale);
     if (!r.ok) throw new Error(r.reason);
-    state.cart.clear(); state.method = null; state.checkoutId = null;
+    state.cart.clear(); state.tempProducts = []; state.method = null; state.checkoutId = null;
     $('#discount').value = ''; $('#received').value = '';
     closeCheckout();
     $('#doneTotal').textContent = yen(sale.total);
@@ -386,6 +398,37 @@ async function confirmSale() {
     state.saving = false;
     if (!$('#checkout').hidden) renderCheckout();
   }
+}
+
+// ---------- 手入力の商品 ----------
+function manualItem() {
+  formDialog('手入力で商品を追加', `
+    <label>商品名<input id="fName" placeholder="例：限定ジャーキー"></label>
+    <label>販売価格（円・税込）<input id="fPrice" type="number" inputmode="numeric"></label>
+    <label>数量<input id="fQty" type="number" inputmode="numeric" value="1"></label>
+    <label class="check"><input type="checkbox" id="fSave"> 商品として登録する（次回からボタンで選べる）</label>
+    <label id="fCatWrap" hidden>カテゴリ<select id="fCat">${CATEGORIES.map((c) => `<option ${c === state.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>`,
+  async () => {
+    const name = $('#fName').value.trim() || '手入力商品';
+    const price = toInt($('#fPrice').value);
+    const qty = toInt($('#fQty').value) || 1;
+    if (price <= 0) return '価格を入力してください';
+    let id;
+    if ($('#fSave').checked) {
+      const cat = $('#fCat').value;
+      const p = { id: uid('p'), name, price, category: cat, hidden: false, sort: Date.now() };
+      await DB.put('products', p);
+      state.products = (await DB.all('products')).sort((a, b) => a.sort - b.sort);
+      id = p.id; state.category = cat;
+    } else {
+      id = uid('t');
+      state.tempProducts.push({ id, name, price, category: '手入力', hidden: true, temp: true });
+    }
+    state.cart.set(id, (state.cart.get(id) || 0) + qty);
+    renderAll();
+    toast(`${name} をカートに追加しました`);
+  }, '追加');
+  $('#fSave').onchange = () => { $('#fCatWrap').hidden = !$('#fSave').checked; };
 }
 
 // ---------- 在庫 ----------
@@ -501,10 +544,10 @@ function confirmDialog(title, body, okLabel, onOk) {
 }
 
 // onSave がエラーメッセージ（文字列）を返したら閉じずに表示する
-function formDialog(title, inner, onSave) {
+function formDialog(title, inner, onSave, okLabel = '保存') {
   $('#dialogBody').innerHTML = `<h3>${esc(title)}</h3>${inner}<p id="fErr" class="error"></p>
     <div class="dialog-actions"><button class="btn ghost" id="dlgCancel">やめる</button>
-    <button class="btn primary" id="dlgOk">保存</button></div>`;
+    <button class="btn primary" id="dlgOk">${esc(okLabel)}</button></div>`;
   $('#dialog').hidden = false;
   $('#dlgCancel').onclick = () => { $('#dialog').hidden = true; };
   let busy = false;

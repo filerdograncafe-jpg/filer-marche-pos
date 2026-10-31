@@ -129,3 +129,4 @@ h2 small { font-size: 13px; color: var(--g3); font-weight: 500; }
 #toast { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 50; background: rgba(17,17,17,.92); color: #fff;
   padding: 14px 20px; border-radius: 12px; font-weight: 700; opacity: 0; pointer-events: none; transition: opacity .2s; max-width: 80vw; text-align: center; }
 #toast.show { opacity: 1; }
+[hidden] { display: none !important; }
