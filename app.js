@@ -117,11 +117,13 @@ function renderGrid() {
     let stockLabel = '';
     if (st) stockLabel = soldOut ? '<span class="stock out">売り切れ</span>'
       : `<span class="stock ${st.remaining <= LOW_STOCK ? 'low' : ''}">残り${st.remaining}</span>`;
-    return `<button class="product ${q ? 'in-cart' : ''} ${soldOut ? 'soldout' : ''}" data-id="${p.id}" ${soldOut || left === 0 && !q ? 'disabled' : ''}>
+    const disabled = soldOut || (left === 0 && !q);
+    return `<div class="product ${q ? 'in-cart' : ''} ${soldOut ? 'soldout' : ''} ${disabled ? 'disabled' : ''}" data-id="${p.id}" role="button">
       ${q ? `<span class="badge">${q}</span>` : ''}
-      <span class="pname">${esc(p.name)}</span>
-      <span class="pfoot"><span class="pprice">${yen(p.price)}</span>${stockLabel}</span>
-    </button>`;
+      <span class="pname">${esc(p.name)}${stockLabel ? `<br>${stockLabel}` : ''}</span>
+      <span class="pfoot"><span class="pprice">${yen(p.price)}</span></span>
+      ${q ? `<button class="minus" data-minus="${p.id}" aria-label="1つ減らす">−</button>` : ''}
+    </div>`;
   }).join('') || '<p class="note">この分類の商品はありません</p>';
 }
 
@@ -279,7 +281,13 @@ function bindUI() {
   });
 
   $('#productGrid').addEventListener('click', (e) => {
-    const b = e.target.closest('.product'); if (!b || b.disabled) return;
+    const minus = e.target.closest('.minus');
+    if (minus) {
+      const id = minus.dataset.minus; const q = state.cart.get(id) || 0;
+      if (q <= 1) state.cart.delete(id); else state.cart.set(id, q - 1);
+      renderGrid(); renderCartBar(); return;
+    }
+    const b = e.target.closest('.product'); if (!b || b.classList.contains('disabled')) return;
     const id = b.dataset.id;
     if (addable(id) <= 0) { toast('在庫が足りません'); return; }
     state.cart.set(id, (state.cart.get(id) || 0) + 1);
