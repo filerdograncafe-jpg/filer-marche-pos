@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="FILERレジ">
+<meta name="theme-color" content="#111111">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+<title>FILER マルシェレジ</title>
+</head>
+<body>
+<header class="top">
+  <div class="brand">FILER <span>treats</span></div>
+  <div class="status"><span id="netStatus" class="dot"></span><span id="todayTotal">¥0</span></div>
+</header>
+
+<main>
+  <!-- ① レジ画面 -->
+  <section id="view-register" class="view active">
+    <div id="eventBanner"></div>
+    <nav id="catTabs" class="cat-tabs"></nav>
+    <div id="productGrid" class="grid"></div>
+  </section>
+
+  <!-- ② 在庫画面 -->
+  <section id="view-stock" class="view">
+    <h2>在庫 <small id="stockEventName"></small></h2>
+    <p class="note">「持込」をタップして持ち込み数を登録すると、販売時に自動で減ります。登録していない商品は在庫管理しません。</p>
+    <div id="stockList"></div>
+  </section>
+
+  <!-- ③ 売上画面 -->
+  <section id="view-sales" class="view">
+    <h2>売上 <small id="salesEventName"></small></h2>
+    <div id="historySummary" class="summary"></div>
+    <h3>商品別</h3>
+    <div id="productSales"></div>
+    <h3>会計履歴</h3>
+    <div id="historyList"></div>
+  </section>
+
+  <!-- ④ 設定画面 -->
+  <section id="view-settings" class="view">
+    <h2>イベント</h2>
+    <div id="eventBox"></div>
+    <h2>データの保存</h2>
+    <p class="note">マルシェ終了後に必ず「全データをバックアップ」して、「ファイル」アプリやGoogleドライブに保存してください。</p>
+    <button class="btn primary wide" id="backupBtn">全データをバックアップ（JSON）</button>
+    <button class="btn wide mt" id="csvBtn">このイベントの会計履歴CSV</button>
+    <button class="btn wide mt" id="stockCsvBtn">このイベントの在庫CSV</button>
+    <label class="btn ghost wide mt file-btn">バックアップから復元<input type="file" id="restoreFile" accept=".json,application/json" hidden></label>
+    <h2>商品</h2>
+    <button class="btn wide" id="addProductBtn">＋ 商品を追加</button>
+    <div id="productAdminList"></div>
+    <p class="note">非表示にした商品はレジに出ません。価格を変更しても過去の売上は変わりません。</p>
+  </section>
+</main>
+
+<!-- カートバー -->
+<div id="cartBar" class="cart-bar">
+  <div><span id="cartCount">0点</span></div>
+  <div class="cart-total" id="cartTotal">¥0</div>
+  <button class="btn primary" id="openCheckout">会計へ</button>
+</div>
+
+<nav class="tabs">
+  <button data-view="register" class="active">レジ</button>
+  <button data-view="stock">在庫</button>
+  <button data-view="sales">売上</button>
+  <button data-view="settings">設定</button>
+</nav>
+
+<!-- 会計シート -->
+<div id="checkout" class="sheet" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="btn ghost" id="closeCheckout">← 商品選択へ戻る</button>
+    </div>
+    <div id="cartList"></div>
+    <div class="row"><span>小計</span><span id="ckSubtotal">¥0</span></div>
+    <div class="row"><span>割引（円）</span><input id="discount" type="number" inputmode="numeric" min="0" placeholder="0"></div>
+    <div class="row big"><span>合計</span><span id="ckTotal">¥0</span></div>
+
+    <div class="methods">
+      <button class="method" data-method="cash">現金</button>
+      <button class="method" data-method="paypay">PayPay</button>
+    </div>
+
+    <div id="cashArea" hidden>
+      <div class="row"><span>お預かり</span><input id="received" type="number" inputmode="numeric" min="0" placeholder="0"></div>
+      <div class="quick">
+        <button data-q="exact">ちょうど</button>
+        <button data-q="1000">1,000</button>
+        <button data-q="5000">5,000</button>
+        <button data-q="10000">10,000</button>
+      </div>
+      <div class="row big"><span>お釣り</span><span id="change">—</span></div>
+    </div>
+
+    <p id="ckError" class="error"></p>
+    <button class="btn primary wide xl" id="confirmBtn" disabled>会計を確定する</button>
+  </div>
+</div>
+
+<!-- 完了画面 -->
+<div id="done" class="sheet done" hidden>
+  <div class="sheet-inner center">
+    <p class="done-label">会計完了</p>
+    <p id="doneTotal" class="done-total"></p>
+    <p id="doneChange" class="done-change"></p>
+    <button class="btn primary wide xl" id="nextBtn">次のお客様</button>
+  </div>
+</div>
+
+<!-- 汎用ダイアログ -->
+<div id="dialog" class="sheet" hidden>
+  <div class="sheet-inner" id="dialogBody"></div>
+</div>
+
+<script src="db.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
