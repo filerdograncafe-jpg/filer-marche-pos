@@ -83,7 +83,15 @@
     </div>
     <div id="cartList"></div>
     <div class="row"><span>小計</span><span id="ckSubtotal">¥0</span></div>
-    <div class="row"><span>割引（円）</span><input id="discount" type="number" inputmode="numeric" min="0" placeholder="0"></div>
+    <div class="row"><span>値引き <small id="discLabel"></small></span><input id="discount" type="number" inputmode="numeric" min="0" placeholder="0"></div>
+    <div class="quick disc">
+      <button data-d="100">100円引</button>
+      <button data-d="200">200円引</button>
+      <button data-d="500">500円引</button>
+      <button data-p="10">10%引</button>
+      <button data-p="20">20%引</button>
+      <button data-d="0">値引きなし</button>
+    </div>
     <div class="row big"><span>合計</span><span id="ckTotal">¥0</span></div>
 
     <div class="methods">

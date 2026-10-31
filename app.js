@@ -82,7 +82,9 @@ function cartLines() {
 function totals() {
   const lines = cartLines();
   const subtotal = lines.reduce((s, l) => s + l.subtotal, 0);
-  const discount = Math.min(toInt($('#discount').value), subtotal);
+  // ○%引きは1円未満を切り捨て（お客様に有利な方向）
+  const raw = state.discPct ? Math.floor(subtotal * state.discPct / 100) : toInt($('#discount').value);
+  const discount = Math.min(raw, subtotal);
   const total = subtotal - discount;
   const count = lines.reduce((s, l) => s + l.qty, 0);
   return { lines, subtotal, discount, total, count };
@@ -154,7 +156,11 @@ function renderCheckout() {
 
   let err = '';
   let ok = t.count > 0 && !!state.method;
-  if (toInt($('#discount').value) > t.subtotal) err = '割引が小計を超えています';
+  if (state.discPct) $('#discount').value = t.discount || '';
+  $('#discLabel').textContent = state.discPct ? `（${state.discPct}%引き）` : '';
+  document.querySelectorAll('.disc button').forEach((b) => b.classList.toggle('active',
+    state.discPct ? b.dataset.p == state.discPct : (b.dataset.d && b.dataset.d !== '0' && toInt($('#discount').value) === +b.dataset.d)));
+  if (!state.discPct && toInt($('#discount').value) > t.subtotal) err = '値引きが小計を超えています';
   for (const l of t.lines) {
     const st = stockOf(l.productId);
     if (st && l.qty > st.remaining) { ok = false; err = `${l.name} の在庫が足りません（残り${st.remaining}個）`; }
@@ -214,7 +220,7 @@ async function renderSales() {
     const items = s.items.map((i) => `${esc(i.name)}×${i.qty}`).join('、');
     return `<div class="sale ${s.status}">
       <div class="sale-head"><span>${time}　${METHOD_LABEL[s.method]}</span><b>${yen(s.total)}</b></div>
-      <div class="sale-items">${items}${s.discount ? `（割引 −${yen(s.discount)}）` : ''}</div>
+      <div class="sale-items">${items}${s.discount ? `（値引き${s.discountPct ? ' ' + s.discountPct + '%' : ''} −${yen(s.discount)}）` : ''}</div>
       ${s.status === 'voided'
         ? `<div class="voided-label">取消済み</div>`
         : `<button class="btn ghost small" data-void="${s.id}">この会計を取消</button>`}
@@ -316,9 +322,15 @@ function bindUI() {
     renderCheckout();
   });
 
-  $('#discount').addEventListener('input', renderCheckout);
+  $('#discount').addEventListener('input', () => { state.discPct = null; renderCheckout(); });
+  document.querySelector('.disc').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.p) { state.discPct = +b.dataset.p; }
+    else { state.discPct = null; $('#discount').value = b.dataset.d === '0' ? '' : b.dataset.d; }
+    renderCheckout();
+  });
   $('#received').addEventListener('input', renderCheckout);
-  document.querySelector('.quick').addEventListener('click', (e) => {
+  document.querySelector('#cashArea .quick').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-q]'); if (!b) return;
     $('#received').value = b.dataset.q === 'exact' ? totals().total : b.dataset.q;
     renderCheckout();
@@ -382,6 +394,7 @@ async function confirmSale() {
     items: t.lines,                    // 販売当時の商品名・価格を保存
     subtotal: t.subtotal,
     discount: t.discount,
+    discountPct: state.discPct || null,
     total: t.total,
     method: state.method,
     received,
@@ -392,7 +405,7 @@ async function confirmSale() {
     const r = await DB.commitSale(sale);
     if (!r.ok) throw new Error(r.reason);
     state.cart.clear(); state.tempProducts = []; state.method = null; state.checkoutId = null;
-    $('#discount').value = ''; $('#received').value = '';
+    $('#discount').value = ''; $('#received').value = ''; state.discPct = null;
     closeCheckout();
     $('#doneTotal').textContent = yen(sale.total);
     $('#doneChange').textContent = sale.method === 'cash' ? `お釣り ${yen(sale.change)}` : 'PayPay';

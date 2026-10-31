@@ -137,3 +137,6 @@ h2 small { font-size: 13px; color: var(--g3); font-weight: 500; }
   font-size: 24px; font-weight: 700; line-height: 1; display: grid; place-items: center; }
 .minus:active { background: var(--g2); }
 .badge { top: 12px; }
+.quick.disc { grid-template-columns: repeat(3, 1fr); margin-bottom: 4px; }
+.quick button.active { background: var(--black); color: var(--white); }
+.row small { color: var(--g3); font-size: 13px; }
