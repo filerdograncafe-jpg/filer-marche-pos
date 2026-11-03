@@ -140,3 +140,9 @@ h2 small { font-size: 13px; color: var(--g3); font-weight: 500; }
 .quick.disc { grid-template-columns: repeat(3, 1fr); margin-bottom: 4px; }
 .quick button.active { background: var(--black); color: var(--white); }
 .row small { color: var(--g3); font-size: 13px; }
+.danger-banner { background: #fde8e6; color: var(--danger); font-size: 13px; text-align: left; }
+.event-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--white); border-radius: 12px; padding: 12px; margin-top: 6px; }
+.event-row small { color: var(--g3); }
+.event-row.current { box-shadow: inset 4px 0 0 var(--black); }
+.cur-label { font-size: 12px; font-weight: 700; background: var(--black); color: var(--white); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+#dataStatus .card { margin-bottom: 10px; line-height: 1.7; }

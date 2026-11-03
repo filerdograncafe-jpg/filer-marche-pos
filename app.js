@@ -34,9 +34,14 @@ function localDateKey(d = new Date()) {
     return;
   }
   await reload();
+  const reopen = await restoreDraft();
   bindUI();
   renderAll();
+  if (reopen) openCheckout();
   updateNet();
+  // iPhoneがアプリを裏に回した時にも、会計途中の内容を保存しておく
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveDraft(); });
+  window.addEventListener('pagehide', saveDraft);
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
     // 新しいバージョンが届いたら、会計中でなければ自動で読み込み直す（データは消えません）
@@ -96,10 +101,12 @@ function renderAll() {
   renderStock(); renderSales(); renderEventBox(); renderAdmin();
 }
 
+const isStandalone = () => window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
 function renderBanner() {
-  $('#eventBanner').innerHTML = state.event
+  const safariWarn = isStandalone() ? '' : `<div class="warn-banner danger-banner">Safariで開いています。ホーム画面の「FILERレジ」アイコンから開いてください。Safariとアイコンではデータが別々に保存されるため、売上が消えたように見えます。</div>`;
+  $('#eventBanner').innerHTML = safariWarn + (state.event
     ? `<div class="event-chip">${esc(state.event.name)}　${esc(state.event.date)}</div>`
-    : `<button class="warn-banner" id="goEvent">イベントが未登録です。タップして登録してください</button>`;
+    : `<button class="warn-banner" id="goEvent">イベントが未登録です。タップして登録してください</button>`);
   const name = state.event ? `（${esc(state.event.name)}）` : '';
   $('#stockEventName').innerHTML = name; $('#salesEventName').innerHTML = name;
 }
@@ -129,7 +136,46 @@ function renderGrid() {
   }).join('') || '<p class="note">この分類の商品はありません</p>';
 }
 
+// ---------- 会計途中の内容の保存・復元 ----------
+// 別のアプリ（PayPayなど）に切り替えてiPhoneがアプリを閉じても、カートが消えないようにする
+const DRAFT_KEY = 'filer-pos-draft';
+let draftReady = false;
+function saveDraft() {
+  if (!draftReady) return;
+  try {
+    if (state.cart.size === 0) { localStorage.removeItem(DRAFT_KEY); return; }
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      cart: [...state.cart], temp: state.tempProducts, method: state.method,
+      discount: $('#discount').value, discPct: state.discPct || null, received: $('#received').value,
+      checkoutId: state.checkoutId, open: !$('#checkout').hidden, category: state.category,
+      eventId: state.event ? state.event.id : null, savedAt: Date.now(),
+    }));
+  } catch (_) {}
+}
+async function restoreDraft() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch (_) {}
+  draftReady = true;
+  if (!d || !Array.isArray(d.cart)) return false;
+  // 12時間以上前のもの、別イベントのもの、すでに確定済みの会計は復元しない
+  const evId = state.event ? state.event.id : null;
+  if (Date.now() - d.savedAt > 12 * 3600 * 1000 || d.eventId !== evId) { saveDraft(); return false; }
+  if (d.checkoutId && await DB.get('sales', d.checkoutId)) { localStorage.removeItem(DRAFT_KEY); return false; }
+  state.tempProducts = Array.isArray(d.temp) ? d.temp : [];
+  for (const [id, q] of d.cart) if (productById(id) && q > 0) state.cart.set(id, q);
+  if (state.cart.size === 0) return false;
+  state.method = d.method || null;
+  state.discPct = d.discPct || null;
+  state.checkoutId = d.checkoutId || null;
+  if (d.category) state.category = d.category;
+  $('#discount').value = d.discount || '';
+  $('#received').value = d.received || '';
+  setTimeout(() => toast('会計途中の内容を復元しました'), 300);
+  return !!d.open;
+}
+
 function renderCartBar() {
+  saveDraft();
   const t = totals();
   $('#cartCount').textContent = `${t.count}点`;
   $('#cartTotal').textContent = yen(t.subtotal);
@@ -137,6 +183,7 @@ function renderCartBar() {
 }
 
 function renderCheckout() {
+  saveDraft();
   const t = totals();
   $('#cartList').innerHTML = t.lines.map((l) => `
     <div class="line">
@@ -248,11 +295,40 @@ function renderStock() {
   }).join('');
 }
 
-function renderEventBox() {
-  $('#eventBox').innerHTML = state.event
-    ? `<div class="card"><b>${esc(state.event.name)}</b><br><small>${esc(state.event.date)}　${esc(state.event.place)}</small></div>
-       <button class="btn wide mt" id="newEventBtn">新しいイベントを始める</button>`
-    : `<button class="btn primary wide" id="newEventBtn">イベントを登録する</button>`;
+async function renderEventBox() {
+  const [events, sales, last] = await Promise.all([DB.all('events'), DB.all('sales'), DB.get('meta', 'lastBackupAt')]);
+  events.sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.createdAt.localeCompare(a.createdAt));
+  const countBy = {};
+  sales.forEach((s) => { if (s.status === 'completed') countBy[s.eventId] = (countBy[s.eventId] || 0) + 1; });
+  const cur = state.event ? state.event.id : null;
+  const list = events.map((e) => `
+    <div class="event-row ${e.id === cur ? 'current' : ''}">
+      <div><b>${esc(e.name)}</b><br><small>${esc(e.date)}　${esc(e.place)}　会計${countBy[e.id] || 0}件</small></div>
+      ${e.id === cur ? '<span class="cur-label">使用中</span>' : `<button class="btn small ghost" data-switch="${e.id}">切り替え</button>`}
+    </div>`).join('');
+  $('#eventBox').innerHTML = (list ? `<p class="note">売上・在庫は「使用中」のイベントの分だけ表示されます。過去のイベントを見る時は「切り替え」を押してください。</p>${list}` : '')
+    + `<button class="btn ${cur ? '' : 'primary'} wide mt" id="newEventBtn">${cur ? '新しいイベントを始める' : 'イベントを登録する'}</button>`;
+
+  let persisted = null;
+  try { if (navigator.storage && navigator.storage.persisted) persisted = await navigator.storage.persisted(); } catch (_) {}
+  const latestSale = sales.reduce((m, s) => (s.createdAt > m ? s.createdAt : m), '');
+  const needBackup = latestSale && (!last || last.value < latestSale);
+  $('#dataStatus').innerHTML = `<div class="card">
+    保存されている会計：<b>${sales.length}件</b>（イベント${events.length}件）<br>
+    <small>最後のバックアップ：${last ? new Date(last.value).toLocaleString('ja-JP') : 'まだありません'}</small>
+    ${needBackup ? '<br><small class="error">バックアップしていない会計があります</small>' : ''}
+    ${persisted === false && !isStandalone() ? '<br><small class="error">Safariで開いているため、データが消えやすい状態です</small>' : ''}
+  </div>`;
+}
+
+async function switchEvent(id) {
+  const go = async () => {
+    await DB.put('meta', { key: 'currentEventId', value: id });
+    state.cart.clear(); state.tempProducts = []; state.method = null; state.checkoutId = null; state.discPct = null;
+    await reload(); renderAll(); toast('イベントを切り替えました');
+  };
+  if (state.cart.size) confirmDialog('イベントを切り替えますか？', 'カートに入っている商品は消えます。', '切り替える', go);
+  else await go();
 }
 
 function renderAdmin() {
@@ -354,7 +430,10 @@ function bindUI() {
     if (b.dataset.adjust) editAdjust(b.dataset.adjust);
   });
 
-  $('#eventBox').addEventListener('click', (e) => { if (e.target.id === 'newEventBtn') newEvent(); });
+  $('#eventBox').addEventListener('click', (e) => {
+    if (e.target.id === 'newEventBtn') newEvent();
+    if (e.target.dataset.switch) switchEvent(e.target.dataset.switch);
+  });
   $('#backupBtn').addEventListener('click', backup);
   $('#csvBtn').addEventListener('click', salesCsv);
   $('#stockCsvBtn').addEventListener('click', stockCsv);
@@ -375,7 +454,7 @@ function openCheckout() {
   $('#checkout').hidden = false;
   renderCheckout();
 }
-function closeCheckout() { $('#checkout').hidden = true; }
+function closeCheckout() { $('#checkout').hidden = true; saveDraft(); }
 
 async function confirmSale() {
   if (state.saving) return;            // 連打防止
@@ -518,6 +597,7 @@ async function backup() {
   const data = await DB.exportAll();
   await saveFile(`filer-pos-backup-${stamp()}.json`, JSON.stringify(data), 'application/json');
   await DB.put('meta', { key: 'lastBackupAt', value: new Date().toISOString() });
+  renderEventBox();
 }
 
 async function salesCsv() {
