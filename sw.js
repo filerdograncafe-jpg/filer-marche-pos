@@ -1,6 +1,6 @@
 // オフライン用：アプリのファイルをiPhone内に保存しておき、電波が無くても起動できるようにする
 // アプリを更新したら CACHE の番号を上げる（売上データはIndexedDBにあるので消えない）
-const CACHE = 'filer-pos-v6';
+const CACHE = 'filer-pos-v7';
 const FILES = ['./', 'index.html', 'style.css', 'db.js', 'app.js', 'manifest.webmanifest', 'icon-180.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {

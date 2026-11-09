@@ -125,6 +125,55 @@ const DB = {
       tx.onerror = () => {};
     });
   },
+  // 会計の編集・後からの追加
+  // 編集：元の会計は消さずに「修正済み」にして在庫を戻し、修正後の会計を新しく保存する（1つのトランザクション）
+  // oldId が null なら、後から追加する会計として保存する
+  replaceSale(oldId, sale) {
+    return new Promise((resolve) => {
+      const tx = this.db.transaction(['sales', 'stockMoves'], 'readwrite');
+      const sales = tx.objectStore('sales');
+      const moves = tx.objectStore('stockMoves');
+      let result = { ok: true };
+      const fail = (reason) => { result = { ok: false, reason }; try { tx.abort(); } catch (_) {} };
+      const step2 = (old) => {
+        const done = (list) => {
+          const stock = stockFromMoves(list);
+          const oldMoves = old ? list.filter((m) => m.saleId === old.id && m.type === 'sale') : [];
+          // 元の会計で減らした分を戻した状態で在庫を確認
+          oldMoves.forEach((m) => { if (stock[m.productId]) stock[m.productId].remaining -= m.qty; });
+          for (const it of sale.items) {
+            const st = stock[it.productId];
+            if (st && st.managed && st.remaining < it.qty) return fail(`${it.name} の在庫が足りません（残り${st.remaining}個）`);
+          }
+          const now = new Date().toISOString();
+          if (old) {
+            old.status = 'edited'; old.editedAt = now; old.editedTo = sale.id;
+            sales.put(old);
+            oldMoves.forEach((m) => moves.add({ id: uid('m'), eventId: m.eventId, productId: m.productId, type: 'void', qty: -m.qty, saleId: old.id, createdAt: now }));
+          }
+          sales.add(sale);
+          for (const it of sale.items) {
+            if (stock[it.productId] && stock[it.productId].managed) {
+              moves.add({ id: uid('m'), eventId: sale.eventId, productId: it.productId, type: 'sale', qty: -it.qty, saleId: sale.id, createdAt: now });
+            }
+          }
+        };
+        if (sale.eventId) { const r = moves.index('eventId').getAll(sale.eventId); r.onsuccess = () => done(r.result); }
+        else done([]);
+      };
+      if (oldId) {
+        const r = sales.get(oldId);
+        r.onsuccess = () => {
+          const old = r.result;
+          if (!old || old.status !== 'completed') return fail('この会計はすでに取消・修正されています');
+          step2(old);
+        };
+      } else step2(null);
+      tx.oncomplete = () => resolve(result);
+      tx.onabort = () => resolve(result.ok ? { ok: false, reason: '保存に失敗しました' } : result);
+      tx.onerror = () => {};
+    });
+  },
   // 会計取消：記録は消さずに「取消」状態にし、減らした在庫を戻す
   async voidSale(id, reason) {
     const tx = this.db.transaction(['sales', 'stockMoves'], 'readwrite');

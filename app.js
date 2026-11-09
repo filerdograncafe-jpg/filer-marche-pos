@@ -13,6 +13,8 @@ const state = {
   method: null,
   checkoutId: null,      // 会計ごとの固有ID（二重会計防止）
   saving: false,
+  salesMode: 'event',     // 売上画面：event=イベント別 / daily=日別
+  dailyOpen: null,
 };
 
 const $ = (s) => document.querySelector(s);
@@ -35,7 +37,7 @@ function localDateKey(d = new Date()) {
   }
   await reload();
   const reopen = await restoreDraft();
-  bindUI();
+  bindUI(); bindUI2();
   renderAll();
   if (reopen) openCheckout();
   updateNet();
@@ -262,17 +264,55 @@ async function renderSales() {
       ${disc ? `<p class="note">商品別売上は割引前の金額です（割引合計 ${yen(disc)}）</p>` : ''}`
     : '<p class="note">まだ販売がありません</p>';
 
-  $('#historyList').innerHTML = list.map((s) => {
-    const time = new Date(s.createdAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-    const items = s.items.map((i) => `${esc(i.name)}×${i.qty}`).join('、');
-    return `<div class="sale ${s.status}">
-      <div class="sale-head"><span>${time}　${METHOD_LABEL[s.method]}</span><b>${yen(s.total)}</b></div>
-      <div class="sale-items">${items}${s.discount ? `（値引き${s.discountPct ? ' ' + s.discountPct + '%' : ''} −${yen(s.discount)}）` : ''}</div>
-      ${s.status === 'voided'
-        ? `<div class="voided-label">取消済み</div>`
-        : `<button class="btn ghost small" data-void="${s.id}">この会計を取消</button>`}
-    </div>`;
-  }).join('') || '<p class="note">会計はまだありません</p>';
+  $('#historyList').innerHTML = list.map((s) => saleCard(s)).join('') || '<p class="note">会計はまだありません</p>';
+  if (state.salesMode === 'daily') renderDaily();
+}
+
+// 会計1件の表示（履歴・日別で共通）
+function saleCard(s, withDate) {
+  const d = new Date(s.createdAt);
+  const time = (withDate ? d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) + ' ' : '')
+    + d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  const items = s.items.map((i) => `${esc(i.name)}×${i.qty}`).join('、');
+  const tags = (s.editedFrom ? '<span class="tag">修正後</span>' : '') + (s.addedLater ? '<span class="tag">後から追加</span>' : '');
+  return `<div class="sale ${s.status}">
+    <div class="sale-head"><span>${time}　${METHOD_LABEL[s.method]} ${tags}</span><b>${yen(s.total)}</b></div>
+    <div class="sale-items">${items}${s.discount ? `（値引き${s.discountPct ? ' ' + s.discountPct + '%' : ''} −${yen(s.discount)}）` : ''}${s.note ? `<br>メモ：${esc(s.note)}` : ''}</div>
+    ${s.status === 'voided' ? `<div class="voided-label">取消済み</div>`
+      : s.status === 'edited' ? `<div class="voided-label">修正済み（修正前の記録）</div>`
+      : `<div class="sale-btns"><button class="btn small" data-editsale="${s.id}">編集</button><button class="btn ghost small" data-void="${s.id}">取消</button></div>`}
+  </div>`;
+}
+
+// ---------- 日別の売上 ----------
+async function dailySummary() {
+  const sales = (await DB.all('sales')).filter((s) => s.status === 'completed');
+  const days = {};
+  sales.forEach((s) => {
+    const d = days[s.dateKey] || (days[s.dateKey] = { date: s.dateKey, count: 0, cash: 0, paypay: 0, total: 0, discount: 0 });
+    d.count++; d.total += s.total; d.discount += s.discount || 0;
+    if (s.method === 'cash') d.cash += s.total; else if (s.method === 'paypay') d.paypay += s.total;
+  });
+  return { days: Object.values(days).sort((a, b) => b.date.localeCompare(a.date)), sales };
+}
+const fmtDate = (k) => { const [y, m, d] = k.split('-'); const w = '日月火水木金土'[new Date(+y, m - 1, +d).getDay()]; return `${+m}/${+d}（${w}）`; };
+
+async function renderDaily() {
+  const { days } = await dailySummary();
+  $('#dailyTable').innerHTML = days.length
+    ? `<table class="tbl daily"><tr><th>日付</th><th>件数</th><th>現金</th><th>PayPay</th><th>合計</th></tr>${days.map((d) =>
+      `<tr data-day="${d.date}" class="${state.dailyOpen === d.date ? 'open' : ''}"><td>${fmtDate(d.date)}</td><td>${d.count}</td><td>${yen(d.cash)}</td><td>${yen(d.paypay)}</td><td><b>${yen(d.total)}</b></td></tr>`).join('')}</table>
+      <p class="note">日付をタップすると、その日の会計を確認・編集できます。</p>`
+    : '<p class="note">まだ会計がありません</p>';
+  renderDayDetail();
+}
+async function renderDayDetail() {
+  const day = state.dailyOpen;
+  if (!day) { $('#dailyDetail').innerHTML = ''; return; }
+  const list = (await DB.all('sales')).filter((s) => s.dateKey === day).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const evs = Object.fromEntries((await DB.all('events')).map((e) => [e.id, e.name]));
+  $('#dailyDetail').innerHTML = `<h3>${fmtDate(day)} の会計</h3>` + (list.map((s) =>
+    `<div class="ev-tag">${esc(evs[s.eventId] || 'イベント未設定')}</div>` + saleCard(s)).join('') || '<p class="note">会計はありません</p>');
 }
 
 function renderStock() {
@@ -415,14 +455,43 @@ function bindUI() {
   $('#confirmBtn').addEventListener('click', confirmSale);
   $('#nextBtn').addEventListener('click', () => { $('#done').hidden = true; });
 
+  $('#salesMode').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-mode]'); if (!b) return;
+    state.salesMode = b.dataset.mode;
+    document.querySelectorAll('#salesMode button').forEach((x) => x.classList.toggle('active', x === b));
+    $('#salesEvent').hidden = state.salesMode !== 'event';
+    $('#salesDaily').hidden = state.salesMode !== 'daily';
+    if (state.salesMode === 'daily') renderDaily();
+  });
+  $('#dailyTable').addEventListener('click', (e) => {
+    const tr = e.target.closest('tr[data-day]'); if (!tr) return;
+    state.dailyOpen = state.dailyOpen === tr.dataset.day ? null : tr.dataset.day;
+    renderDaily();
+  });
+  $('#view-sales').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.editsale) editSale(b.dataset.editsale);
+    if (b.dataset.addsale) editSale(null);
+    if (b.dataset.void && b.closest('#dailyDetail')) voidSaleConfirm(b.dataset.void);
+  });
+  $('#dailyCsvBtn').addEventListener('click', dailyCsv);
   $('#historyList').addEventListener('click', (e) => {
     const id = e.target.dataset.void; if (!id) return;
+    voidSaleConfirm(id);
+  });
+}
+
+function voidSaleConfirm(id) {
+  {
     confirmDialog('この会計を取消しますか？', '取消した会計は履歴に「取消済み」として残り、売上から除かれ、在庫も元に戻ります。', '取消する', async () => {
       await DB.voidSale(id);
       await reloadStock();
       renderAll();
     });
-  });
+  }
+}
+
+function bindUI2() {
 
   $('#stockList').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
@@ -498,6 +567,130 @@ async function confirmSale() {
     state.saving = false;
     if (!$('#checkout').hidden) renderCheckout();
   }
+}
+
+// ---------- 会計の編集・後から追加 ----------
+const toLocalInput = (d) => { const z = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; };
+
+async function editSale(id) {
+  const old = id ? await DB.get('sales', id) : null;
+  if (id && (!old || old.status !== 'completed')) { toast('この会計は編集できません'); return; }
+  const ed = {
+    lines: old ? old.items.map((i) => ({ ...i })) : [],
+    method: old ? old.method : 'cash',
+  };
+  const productOpts = state.products.filter((p) => !p.hidden)
+    .map((p) => `<option value="${p.id}">${esc(p.category)}｜${esc(p.name)}（${yen(p.price)}）</option>`).join('');
+  $('#dialogBody').innerHTML = `<h3>${old ? '会計を編集' : '会計を後から追加'}</h3>
+    ${old ? '<p class="note">保存すると、元の会計は「修正済み」として履歴に残り、売上と在庫は修正後の内容で計算し直されます。</p>'
+          : `<p class="note">記録し忘れた会計を追加します。${state.event ? `イベント「${esc(state.event.name)}」に追加されます。` : ''}</p>`}
+    <label>日時<input id="edWhen" type="datetime-local" value="${toLocalInput(old ? new Date(old.createdAt) : new Date())}"></label>
+    <div id="edLines"></div>
+    <label>商品を追加<select id="edAdd"><option value="">選んでください</option>${productOpts}<option value="__manual">手入力（名前・値段を入れる）</option></select></label>
+    <div id="edManual" hidden class="ed-manual">
+      <input id="edMName" placeholder="商品名"><input id="edMPrice" type="number" inputmode="numeric" placeholder="値段">
+      <button class="btn small" id="edMAdd">追加</button>
+    </div>
+    <label>値引き（円）<input id="edDisc" type="number" inputmode="numeric" value="${old && old.discount ? old.discount : ''}" placeholder="0"></label>
+    <div class="methods ed-methods">
+      <button class="method" data-edmethod="cash">現金</button>
+      <button class="method" data-edmethod="paypay">PayPay</button>
+    </div>
+    <label>メモ（修正の理由など）<input id="edNote" value="${esc(old && old.note ? old.note : '')}"></label>
+    <div class="row big"><span>合計</span><span id="edTotal">¥0</span></div>
+    <p id="fErr" class="error"></p>
+    <div class="dialog-actions"><button class="btn ghost" id="dlgCancel">やめる</button>
+    <button class="btn primary" id="dlgOk">保存</button></div>`;
+  $('#dialog').hidden = false;
+  $('#dialog .sheet-inner').scrollTop = 0;
+
+  const calc = () => {
+    const subtotal = ed.lines.reduce((s, l) => s + l.price * l.qty, 0);
+    const discount = Math.min(toInt($('#edDisc').value), subtotal);
+    return { subtotal, discount, total: subtotal - discount };
+  };
+  const draw = () => {
+    $('#edLines').innerHTML = ed.lines.map((l, i) => `
+      <div class="line">
+        <div class="lname">${esc(l.name)}<small><input class="ed-price" data-i="${i}" type="number" inputmode="numeric" value="${l.price}">円</small></div>
+        <div class="qty"><button data-edq="${i}" data-d="-1">−</button><span>${l.qty}</span><button data-edq="${i}" data-d="1">＋</button></div>
+        <div class="lsub">${yen(l.price * l.qty)}</div>
+        <button class="del" data-eddel="${i}">×</button>
+      </div>`).join('') || '<p class="note">商品がありません。下の「商品を追加」から選んでください。</p>';
+    document.querySelectorAll('[data-edmethod]').forEach((b) => b.classList.toggle('active', b.dataset.edmethod === ed.method));
+    $('#edTotal').textContent = yen(calc().total);
+  };
+  draw();
+
+  $('#dialogBody').onclick = (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.edq) { const l = ed.lines[+b.dataset.edq]; l.qty += +b.dataset.d; if (l.qty <= 0) ed.lines.splice(+b.dataset.edq, 1); draw(); }
+    if (b.dataset.eddel) { ed.lines.splice(+b.dataset.eddel, 1); draw(); }
+    if (b.dataset.edmethod) { ed.method = b.dataset.edmethod; draw(); }
+  };
+  $('#dialogBody').oninput = (e) => {
+    if (e.target.classList.contains('ed-price')) { ed.lines[+e.target.dataset.i].price = toInt(e.target.value); $('#edTotal').textContent = yen(calc().total); }
+    if (e.target.id === 'edDisc') $('#edTotal').textContent = yen(calc().total);
+  };
+  const addLine = (item) => {
+    const ex = ed.lines.find((l) => l.productId === item.productId && l.price === item.price && l.name === item.name);
+    if (ex) ex.qty++; else ed.lines.push({ ...item, qty: 1 });
+    draw();
+  };
+  $('#edAdd').onchange = () => {
+    const v = $('#edAdd').value;
+    $('#edManual').hidden = v !== '__manual';
+    if (v && v !== '__manual') {
+      const p = productById(v);
+      addLine({ productId: p.id, name: p.name, category: p.category, price: p.price });
+      $('#edAdd').value = '';
+    }
+  };
+  $('#edMAdd').onclick = () => {
+    const price = toInt($('#edMPrice').value);
+    if (price <= 0) { $('#fErr').textContent = '値段を入力してください'; return; }
+    addLine({ productId: uid('t'), name: $('#edMName').value.trim() || '手入力商品', category: '手入力', price });
+    $('#edMName').value = ''; $('#edMPrice').value = ''; $('#edManual').hidden = true; $('#edAdd').value = ''; $('#fErr').textContent = '';
+  };
+  $('#dlgCancel').onclick = () => { $('#dialog').hidden = true; $('#dialogBody').onclick = null; $('#dialogBody').oninput = null; };
+  let busy = false;
+  $('#dlgOk').onclick = async () => {
+    if (busy) return;
+    const t = calc();
+    if (!ed.lines.length) { $('#fErr').textContent = '商品を1つ以上入れてください'; return; }
+    if (ed.lines.some((l) => l.price <= 0)) { $('#fErr').textContent = '値段が0円の商品があります'; return; }
+    if (toInt($('#edDisc').value) > t.subtotal) { $('#fErr').textContent = '値引きが小計を超えています'; return; }
+    const when = $('#edWhen').value ? new Date($('#edWhen').value) : new Date();
+    if (isNaN(when)) { $('#fErr').textContent = '日時を正しく入力してください'; return; }
+    busy = true;
+    const sale = {
+      id: uid('s'),
+      createdAt: when.toISOString(),
+      dateKey: localDateKey(when),
+      eventId: old ? old.eventId : (state.event ? state.event.id : null),
+      items: ed.lines.map((l) => ({ productId: l.productId, name: l.name, category: l.category, price: l.price, qty: l.qty, subtotal: l.price * l.qty })),
+      subtotal: t.subtotal, discount: t.discount, discountPct: null, total: t.total,
+      method: ed.method,
+      received: ed.method === 'cash' ? (old && old.method === 'cash' && old.received >= t.total ? old.received : t.total) : null,
+      change: null, status: 'completed',
+      note: $('#edNote').value.trim(),
+      ...(old ? { editedFrom: old.id } : { addedLater: true }),
+    };
+    if (sale.received != null) sale.change = sale.received - sale.total;
+    const r = await DB.replaceSale(old ? old.id : null, sale);
+    busy = false;
+    if (!r.ok) { $('#fErr').textContent = '保存できませんでした：' + r.reason; return; }
+    $('#dialog').hidden = true; $('#dialogBody').onclick = null; $('#dialogBody').oninput = null;
+    await reloadStock(); renderAll(); if (state.salesMode === 'daily') renderDaily();
+    toast(old ? '会計を修正しました' : '会計を追加しました');
+  };
+}
+
+async function dailyCsv() {
+  const { days } = await dailySummary();
+  const rows = [['日付', '会計件数', '現金', 'PayPay', '合計', '値引き合計']];
+  days.slice().reverse().forEach((d) => rows.push([d.date, d.count, d.cash, d.paypay, d.total, d.discount]));
+  await saveFile(`filer-daily-${stamp()}.csv`, toCsv(rows), 'text/csv');
 }
 
 // ---------- 手入力の商品 ----------
@@ -604,7 +797,7 @@ async function salesCsv() {
   const list = (await eventSales()).reverse();
   const rows = [['会計ID', '日時', '状態', '決済', '商品', 'カテゴリ', '単価', '数量', '小計', '会計割引', '会計合計']];
   list.forEach((s) => s.items.forEach((i, idx) => rows.push([
-    s.id, new Date(s.createdAt).toLocaleString('ja-JP'), s.status === 'voided' ? '取消' : '確定', METHOD_LABEL[s.method],
+    s.id, new Date(s.createdAt).toLocaleString('ja-JP'), ({ voided: '取消', edited: '修正前' }[s.status] || '確定'), METHOD_LABEL[s.method],
     i.name, i.category, i.price, i.qty, i.subtotal, idx === 0 ? s.discount : '', idx === 0 ? s.total : '',
   ])));
   await saveFile(`filer-sales-${stamp()}.csv`, toCsv(rows), 'text/csv');

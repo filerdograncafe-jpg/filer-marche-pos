@@ -36,12 +36,24 @@
 
   <!-- ③ 売上画面 -->
   <section id="view-sales" class="view">
-    <h2>売上 <small id="salesEventName"></small></h2>
-    <div id="historySummary" class="summary"></div>
-    <h3>商品別</h3>
-    <div id="productSales"></div>
-    <h3>会計履歴</h3>
-    <div id="historyList"></div>
+    <div class="seg" id="salesMode">
+      <button data-mode="event" class="active">イベント別</button>
+      <button data-mode="daily">日別</button>
+    </div>
+    <div id="salesEvent">
+      <h2>売上 <small id="salesEventName"></small></h2>
+      <div id="historySummary" class="summary"></div>
+      <h3>商品別</h3>
+      <div id="productSales"></div>
+      <h3>会計履歴</h3>
+      <button class="btn ghost wide" data-addsale="1">＋ 会計を後から追加</button>
+      <div id="historyList"></div>
+    </div>
+    <div id="salesDaily" hidden>
+      <h2>日別の売上 <small>（全イベント・取消/修正前は除く）</small></h2>
+      <div id="dailyTable"></div>
+      <div id="dailyDetail"></div>
+    </div>
   </section>
 
   <!-- ④ 設定画面 -->
@@ -54,6 +66,7 @@
     <button class="btn primary wide" id="backupBtn">全データをバックアップ（JSON）</button>
     <button class="btn wide mt" id="csvBtn">このイベントの会計履歴CSV</button>
     <button class="btn wide mt" id="stockCsvBtn">このイベントの在庫CSV</button>
+    <button class="btn wide mt" id="dailyCsvBtn">日別売上CSV（現金・PayPay）</button>
     <label class="btn ghost wide mt file-btn">バックアップから復元<input type="file" id="restoreFile" accept=".json,application/json" hidden></label>
     <h2>商品</h2>
     <button class="btn wide" id="addProductBtn">＋ 商品を追加</button>
