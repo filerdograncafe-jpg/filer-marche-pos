@@ -220,7 +220,7 @@ for(let i=0;i<SN;i++){
 }
 function drawSmoke(t){
   SMOKE.forEach((g,i)=>{
-    const p=((t/2.4)+i/SN)%1;
+    const p=((t/4.8)+i/SN)%1;
     const x=139+p*48+Math.sin(p*4+i*2.3)*7*p;
     const y=106-p*135;
     const r=7+p*22;
