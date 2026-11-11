@@ -48,7 +48,7 @@ button:focus-visible{outline:3px solid var(--paper);outline-offset:3px}
   <g id="world">
     <line id="ground" x1="-600" y1="346" x2="900" y2="346" stroke="var(--gold)" stroke-width="3" stroke-linecap="round" opacity=".35"/>
     <g id="hop">
-      <g id="smoke"><path d="M139,114 C122,98 160,88 150,68 C141,50 176,44 172,20" fill="none" stroke="var(--gold)" stroke-width="7" stroke-linecap="round"/></g>
+      <g id="smoke"></g>
       <g id="puffs"></g>
       <g fill="var(--gold)">
         <rect x="124" y="120" width="30" height="50" rx="4"/>
@@ -148,7 +148,7 @@ DOGS.forEach(d=>{
   g.innerHTML=dogMarkup(d);wrap.appendChild(g);dogsG.appendChild(wrap);
   d.wrap=wrap;d.g=g;d.parts={};
   ['lb1','lb2','lf1','lf2','tail','head'].forEach(k=>{const el=g.querySelector('.'+k);d.parts[k]={el,x:+el.dataset.x,y:+el.dataset.y}});
-  d.x0=d.dir>0?-440:720;
+  d.x0=d.dir>0?-500:780;
   d.start=d.arrive-Math.abs(DOOR-d.x0)/SPEED;
   d.enter=d.arrive;
 });
@@ -209,7 +209,26 @@ function drawNotes(t){NOTES.forEach(n=>{
 
 /* ---------- smoke puffs on landing ---------- */
 const puffsG=$('puffs');const PUFFS=[];
-for(let i=0;i<9;i++){const c=document.createElementNS(NS,'circle');c.setAttribute('fill','#f4b300');puffsG.appendChild(c);PUFFS.push(c)}
+for(let i=0;i<9;i++){const c=document.createElementNS(NS,'circle');c.setAttribute('fill','#ffffff');puffsG.appendChild(c);PUFFS.push(c)}
+/* ---------- chimney smoke: white puffs that rise, swell and fade ---------- */
+const smokeG=$('smoke');const SMOKE=[];const SN=6;
+for(let i=0;i<SN;i++){
+  const g=document.createElementNS(NS,'g');
+  g.innerHTML='<circle r="1" cx="0" cy="0"/><circle r=".72" cx="-.62" cy=".28"/><circle r=".78" cx=".6" cy=".22"/><circle r=".6" cx=".05" cy="-.55"/>';
+  g.setAttribute('fill',i%2?'#ffffff':'#f3f1ec');
+  smokeG.appendChild(g);SMOKE.push(g);
+}
+function drawSmoke(t){
+  SMOKE.forEach((g,i)=>{
+    const p=((t/2.4)+i/SN)%1;
+    const x=139+p*48+Math.sin(p*4+i*2.3)*7*p;
+    const y=106-p*135;
+    const r=7+p*22;
+    const op=p<.1?p/.1:p<.55?1:Math.max(0,1-(p-.55)/.45);
+    g.setAttribute('transform',`translate(${x},${y}) scale(${r})`);
+    g.setAttribute('opacity',op);
+  });
+}
 
 /* ---------- house hop ---------- */
 function hopAt(t){
@@ -227,7 +246,7 @@ function hopAt(t){
 
 /* ---------- logo pieces ---------- */
 const letters=[...$('letters').children],villa=[...$('villa').children];
-const STAGE={x:1058,y:251,s:2.6},LOGO={x:904,y:258.5,s:1.505};
+const STAGE={x:1086,y:340,s:2.4},LOGO={x:904,y:258.5,s:1.505};
 
 const END=9.8;
 let t0=performance.now(),paused=false,pausedAt=0;
@@ -245,13 +264,13 @@ function frame(t){
   const h=hopAt(t);
   $('hop').setAttribute('transform',`translate(138,346) translate(0,${h.y}) scale(${h.sx},${h.sy}) translate(-138,-346)`);
   // smoke sway
-  $('smoke').setAttribute('transform',`rotate(${Math.sin(t*2.2)*7} 139 114)`);
+  drawSmoke(t);
   // puffs after each landing
   PUFFS.forEach((c,i)=>{
     const hp=HOPS[i%3],lt=hp[0]+hp[1]*0.86,u=(t-lt-(i/3|0)*0.07)/1.1;
     if(u<0||u>1){c.setAttribute('r',0);return}
     c.setAttribute('cx',139+Math.sin(i*2.1)*14*u);c.setAttribute('cy',105-u*70-(i/3|0)*6);
-    c.setAttribute('r',(4+(i/3|0)*2)*(0.6+u));c.setAttribute('opacity',(1-u)*.8);
+    c.setAttribute('r',(7+(i/3|0)*3)*(0.6+u));c.setAttribute('opacity',(1-u)*.9);
   });
   // door
   const o=doorAt(t);
