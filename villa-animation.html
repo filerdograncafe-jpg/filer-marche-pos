@@ -29,12 +29,11 @@ svg#stage{width:100%;max-width:1400px;height:auto;max-height:calc(100% - 64px);d
 button{font:800 15px/1 var(--round);color:var(--ink);background:var(--gold);border:0;border-radius:999px;padding:11px 20px;cursor:pointer;letter-spacing:.04em}
 button.ghost{background:transparent;color:var(--gold);box-shadow:inset 0 0 0 2px var(--gold)}
 button:focus-visible{outline:3px solid var(--paper);outline-offset:3px}
-.bubble text{font:800 22px var(--round)}
 </style>
 </head>
 <body>
 
-<svg id="stage" viewBox="0 0 2835 1417.5" role="img" aria-label="犬たちがFILER VILLAのログハウスに入っていき、家がぴょんぴょん跳ねてロゴになるアニメーション">
+<svg id="stage" viewBox="0 0 2835 1417.5" role="img" aria-label="犬たちが音符を弾ませながらFILER VILLAのログハウスに入っていき、家がぴょんぴょん跳ねてロゴになるアニメーション">
   <defs>
     <clipPath id="doorClip"><rect x="117" y="289" width="42" height="58" rx="21" ry="21"/><rect x="117" y="310" width="42" height="37"/></clipPath>
   </defs>
@@ -109,34 +108,39 @@ function dogMarkup(o){
     :o.tail==='pom'?`<line x1="0" y1="0" x2="-7" y2="-12" stroke="${c}" stroke-width="4" stroke-linecap="round"/><circle cx="-8" cy="-15" r="5.5" fill="${c}"/>`
     :`<path d="M0,0 C-8,-1 -15,-7 -18,-14" fill="none" stroke="${c}" stroke-width="5.5" stroke-linecap="round"/>`;
   const fluff=o.fluffy?[-L,-L/2,0,L/2,L].map(x=>`<circle cx="${x}" cy="${by-3}" r="8" fill="${c}"/>`).join(''):'';
+  const spots=o.spots?[[-L*.6,-3,3],[-L*.15,4,2.6],[L*.3,-4,3.2],[L*.7,3,2.2],[-L*.85,4,2],[L*.05,-7,1.8]].map(([x,y,r])=>`<circle cx="${x}" cy="${by+y}" r="${r}" fill="#262626"/>`).join(''):'';
   const ear=o.ear==='pointy'
     ?`<path d="M-7,-5 L-3,-19 L5,-8 Z" fill="${c}"/><path d="M-4.5,-7 L-2.6,-14 L1.5,-8.5 Z" fill="${o.inner||'#f2b8a6'}"/>`
     :`<ellipse cx="-5" cy="2" rx="5.5" ry="10" fill="${o.earColor||dk}" transform="rotate(18 -5 2)"/>`;
   return `
   <g class="tail" data-x="${-L+1}" data-y="${by-4}">${tail}</g>
   ${leg('lb2',-L*0.55,dk)}${leg('lf2',L*0.55,dk)}
-  <ellipse cx="0" cy="${by}" rx="${L+3}" ry="10.5" fill="${c}"/>${fluff}
+  <ellipse cx="0" cy="${by}" rx="${L+3}" ry="10.5" fill="${c}"/>${fluff}${spots}
   ${o.belly?`<ellipse cx="3" cy="${by+5}" rx="${L*0.62}" ry="4.5" fill="${bl}"/>`:''}
   ${leg('lb1',-L*0.55-2,c)}${leg('lf1',L*0.55+2,c)}
   <rect x="${L-3}" y="${by-9}" width="5" height="13" rx="2.5" fill="${GOLD}"/>
   <g class="head" data-x="${L+3}" data-y="${by-12}">
     ${o.ear==='pointy'?'':ear}
     <circle r="11.5" fill="${c}"/>${o.fluffy?`<circle cx="-2" cy="-10" r="7" fill="${c}"/>`:''}
-    <ellipse cx="9" cy="3.5" rx="8" ry="6" fill="${bl}"/>
-    <circle cx="16.3" cy="1.4" r="2.8" fill="#222"/>
-    <circle cx="4.5" cy="-3" r="2.1" fill="#222"/><circle cx="5.2" cy="-3.7" r=".7" fill="#fff"/>
-    <circle cx="2" cy="4" r="2.6" fill="#ff8f7d" opacity=".55"/>
+    ${o.spots?'<circle cx="-4" cy="-6" r="2.4" fill="#262626"/><circle cx="2" cy="-9" r="1.6" fill="#262626"/>':''}
+    <path d="M6,7 Q10,15 15,7 Z" fill="#3a1d1d"/><ellipse cx="10.5" cy="11" rx="3" ry="2.6" fill="#ff7f8f"/>
+    <ellipse cx="9" cy="3.2" rx="8" ry="5.4" fill="${bl}"/>
+    <circle cx="16.3" cy="1.2" r="2.8" fill="#222"/>
+    <path d="M1.6,-2.4 Q4.6,-6.8 7.6,-2.4" fill="none" stroke="#222" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="2" cy="4" r="2.8" fill="#ff8f7d" opacity=".6"/>
     ${o.ear==='pointy'?ear:''}
   </g>`;
 }
 const DOOR=138;
 const DOGS=[
-  {name:'しば',   color:'#d98a3a',dark:'#a8642a',belly:'#f6e7d0',ear:'pointy',tail:'curl',L:16,leg:14,s:1,   dir:1, arrive:3.0,speed:190},
-  {name:'ダックス',color:'#8a5532',dark:'#5e3720',belly:'#c48a5c',ear:'floppy',tail:'straight',L:25,leg:7,s:1,dir:1,arrive:3.6,speed:170},
-  {name:'プードル',color:'#efe6d6',dark:'#cbbfa9',ear:'floppy',earColor:'#e2d5bd',tail:'pom',fluffy:true,L:13,leg:14,s:.95,dir:1,arrive:4.2,speed:200},
-  {name:'ゴールデン',color:'#e2b35e',dark:'#b98a3b',belly:'#f3d699',ear:'floppy',tail:'straight',L:21,leg:17,s:1.15,dir:-1,arrive:4.8,speed:180},
-  {name:'こいぬ', color:'#d7cfc3',dark:'#a99f92',belly:'#fff6ea',ear:'pointy',inner:'#f3b0a4',tail:'curl',L:11,leg:10,s:.8,dir:1,arrive:6.1,speed:240,waitUntil:7.05,late:true},
+  {color:'#d98a3a',dark:'#a8642a',belly:'#f6e7d0',ear:'pointy',tail:'curl',L:16,leg:14,s:1,dir:1,arrive:1.2},
+  {color:'#e2b35e',dark:'#b98a3b',belly:'#f3d699',ear:'floppy',tail:'straight',L:21,leg:17,s:1.15,dir:-1,arrive:1.6},
+  {color:'#efe6d6',dark:'#cbbfa9',ear:'floppy',earColor:'#e2d5bd',tail:'pom',fluffy:true,L:13,leg:14,s:.95,dir:1,arrive:2.0},
+  {color:'#f7f4ee',dark:'#d8d2c6',ear:'floppy',earColor:'#262626',tail:'straight',spots:true,L:20,leg:17,s:1.1,dir:-1,arrive:2.4},
+  {color:'#8a5532',dark:'#5e3720',belly:'#c48a5c',ear:'floppy',tail:'straight',L:25,leg:7,s:1,dir:1,arrive:2.8},
+  {color:'#d7cfc3',dark:'#a99f92',belly:'#fff6ea',ear:'pointy',inner:'#f3b0a4',tail:'curl',L:11,leg:10,s:.8,dir:-1,arrive:3.2},
 ];
+const SPEED=330;
 const dogsG=$('dogs');
 DOGS.forEach(d=>{
   const wrap=document.createElementNS(NS,'g');
@@ -144,61 +148,63 @@ DOGS.forEach(d=>{
   g.innerHTML=dogMarkup(d);wrap.appendChild(g);dogsG.appendChild(wrap);
   d.wrap=wrap;d.g=g;d.parts={};
   ['lb1','lb2','lf1','lf2','tail','head'].forEach(k=>{const el=g.querySelector('.'+k);d.parts[k]={el,x:+el.dataset.x,y:+el.dataset.y}});
-  d.x0=d.dir>0?-480:770;
-  d.dist=Math.abs(DOOR-d.x0);
-  d.start=d.arrive-d.dist/d.speed;
-  d.enter=Math.max(d.arrive,d.waitUntil||0);
+  d.x0=d.dir>0?-440:720;
+  d.start=d.arrive-Math.abs(DOOR-d.x0)/SPEED;
+  d.enter=d.arrive;
 });
 const setT=(p,a)=>p.el.setAttribute('transform',`translate(${p.x},${p.y}) rotate(${a})`);
-const ENTER=0.5;
+const ENTER=0.35;
+const dogX=(d,t)=>t<d.arrive?d.x0+d.dir*SPEED*(t-d.start):DOOR;
 function drawDog(d,t){
   const w=d.wrap;
   if(t<d.start||t>d.enter+ENTER){w.setAttribute('visibility','hidden');return}
   w.setAttribute('visibility','visible');
-  let x,y=0,k=1,op=1,walking=true;
-  if(t<d.arrive){x=d.x0+d.dir*d.speed*(t-d.start)}
-  else{x=DOOR;walking=false}
-  const ph=(t-d.start)*d.speed/9;
-  const swing=walking?Math.sin(ph)*30:0;
+  const walking=t<d.arrive;
+  let x=dogX(d,t),y=0,k=1,op=1;
+  const ph=(t-d.start)*19+d.arrive*3;
+  const swing=Math.sin(ph)*34;
   setT(d.parts.lb1,swing);setT(d.parts.lf1,-swing);setT(d.parts.lb2,-swing);setT(d.parts.lf2,swing);
-  setT(d.parts.tail,Math.sin(t*(walking?14:22))*16);
-  let headA=walking?Math.sin(ph*2)*3:0;
-  if(!walking&&t<d.enter){headA=-12+Math.sin(t*9)*4} // looking up at the door / barking
-  setT(d.parts.head,headA);
-  const bob=walking?-Math.abs(Math.sin(ph))*2.2:0;
-  let sx=d.dir;
-  if(t>=d.enter){
+  setT(d.parts.tail,Math.sin(t*30)*22);
+  setT(d.parts.head,-6+Math.sin(ph)*7);
+  const bob=-Math.abs(Math.sin(ph))*7;
+  let sx=d.dir,tilt=Math.cos(ph)*4;
+  if(!walking){
     const u=seg(t,d.enter,d.enter+ENTER);
     k=1-0.5*ease(u);y=-6*u;op=1-u*u;sx=d.dir*(1-0.55*u);
     w.setAttribute('clip-path','url(#doorClip)');
   }else w.removeAttribute('clip-path');
-  const S=d.s*1.3;d.g.setAttribute('transform',`translate(${x},${346+bob+y}) scale(${sx*k*S},${k*S})`);
+  const S=d.s*1.3;
+  d.g.setAttribute('transform',`translate(${x},${346+bob+y}) rotate(${tilt*d.dir}) scale(${sx*k*S},${k*S})`);
   w.setAttribute('opacity',op);
 }
 
 /* ---------- door ---------- */
-const DOORKEYS=[[0,0],[2.2,0],[2.55,1],[5.45,1],[5.8,0],[6.75,0],[7.0,1],[7.7,1],[8.0,0]];
+const DOORKEYS=[[0,0],[0.3,0],[0.6,1],[3.6,1],[3.85,0]];
 function doorAt(t){for(let i=1;i<DOORKEYS.length;i++){const[a,va]=DOORKEYS[i-1],[b,vb]=DOORKEYS[i];if(t<=b)return lerp(va,vb,ease(seg(t,a,b)))}return 0}
 
-/* ---------- speech bubbles ---------- */
+/* ---------- music notes ---------- */
 const fx=$('fx');
-const BUBBLES=[ // [time, x, y, text, size]
-  [6.25,70,236,'ワン！',1],[6.75,60,224,'ワンワン！',1],
-  [8.75,-40,140,'ワン',1.2],[9.3,300,120,'ワン！',1.2],[9.85,40,60,'ワンワン！',1.3],
-];
-BUBBLES.forEach(b=>{
-  const g=document.createElementNS(NS,'g');g.setAttribute('class','bubble');
-  const w=b[3].length*21+22;
-  g.innerHTML=`<rect x="${-w/2}" y="-20" width="${w}" height="36" rx="18" fill="#fff8e6"/><path d="M-6,14 L0,26 L8,14 Z" fill="#fff8e6"/><text y="6" text-anchor="middle" fill="#1b1b1d">${b[3]}</text>`;
-  fx.appendChild(g);b.el=g;
+const NOTE_COLORS=['#f4b300','#fff8e6','#ff9db0','#8fe3c8','#9cc8ff'];
+const NOTES=[]; // {t, x, y, ch, size, drift}
+let ni=0;
+const addNote=(t,x,y,size=1)=>{NOTES.push({t,x,y,ch:ni%2?'♪':'♫',size,drift:(ni%3-1)*18,col:NOTE_COLORS[ni%NOTE_COLORS.length]});ni++};
+// a note pops above each dog while it trots in
+DOGS.forEach((d,i)=>{[0.55,0.2].forEach(b=>{const tt=d.arrive-b;addNote(tt,dogX(d,tt),346-62*d.s,.85)})});
+// bursts on each hop of the house
+const HOPS=[[4.0,0.5,58],[4.5,0.5,58],[5.0,0.6,44]];
+HOPS.forEach(([st],i)=>{addNote(st+.12,-10-i*12,170-i*10,1.15);addNote(st+.18,286+i*12,160-i*10,1.15);addNote(st+.26,138+(i-1)*40,40,1)});
+NOTES.forEach(n=>{
+  const g=document.createElementNS(NS,'g');
+  g.innerHTML=`<text text-anchor="middle" y="10" font-size="34" font-weight="800" fill="${n.col}" stroke="#1b1b1d" stroke-width="2" paint-order="stroke">${n.ch}</text>`;
+  fx.appendChild(g);n.el=g;
 });
-function drawBubbles(t){BUBBLES.forEach(b=>{
-  const u=(t-b[0])/0.9;
-  if(u<0||u>1){b.el.setAttribute('visibility','hidden');return}
-  b.el.setAttribute('visibility','visible');
-  const pop=u<.2?bounce(u/.2):1;const s=b[4]*0.8*pop;
-  b.el.setAttribute('transform',`translate(${b[1]},${b[2]-u*24}) scale(${s})`);
-  b.el.setAttribute('opacity',u>.75?1-(u-.75)/.25:1);
+function drawNotes(t){NOTES.forEach(n=>{
+  const u=(t-n.t)/1.0;
+  if(u<0||u>1){n.el.setAttribute('visibility','hidden');return}
+  n.el.setAttribute('visibility','visible');
+  const pop=u<.22?bounce(u/.22):1;
+  n.el.setAttribute('transform',`translate(${n.x+n.drift*u+Math.sin(u*9)*5},${n.y-u*46}) rotate(${Math.sin(u*8)*14}) scale(${n.size*pop})`);
+  n.el.setAttribute('opacity',u>.7?1-(u-.7)/.3:1);
 })}
 
 /* ---------- smoke puffs on landing ---------- */
@@ -206,7 +212,6 @@ const puffsG=$('puffs');const PUFFS=[];
 for(let i=0;i<9;i++){const c=document.createElementNS(NS,'circle');c.setAttribute('fill','#f4b300');puffsG.appendChild(c);PUFFS.push(c)}
 
 /* ---------- house hop ---------- */
-const HOPS=[[8.4,0.6,58],[9.0,0.6,58],[9.6,0.7,44]];
 function hopAt(t){
   for(const[st,dur,H] of HOPS){
     const u=(t-st)/dur;
@@ -224,18 +229,18 @@ function hopAt(t){
 const letters=[...$('letters').children],villa=[...$('villa').children];
 const STAGE={x:1058,y:251,s:2.6},LOGO={x:904,y:258.5,s:1.505};
 
-const END=17.5;
+const END=9.8;
 let t0=performance.now(),paused=false,pausedAt=0;
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
-if(reduce){paused=true;pausedAt=14}
+if(reduce){paused=true;pausedAt=9}
 
 function frame(t){
   // world camera
-  const cu=ease(seg(t,10.6,12.0));
+  const cu=ease(seg(t,5.7,6.6));
   const cx=lerp(STAGE.x,LOGO.x,cu),cy=lerp(STAGE.y,LOGO.y,cu),cs=lerp(STAGE.s,LOGO.s,cu);
   $('world').setAttribute('transform',`translate(${cx},${cy}) scale(${cs})`);
   $('world').setAttribute('opacity',seg(t,0,.6));
-  $('ground').setAttribute('opacity',.35*(1-seg(t,10.6,11.2)));
+  $('ground').setAttribute('opacity',.35*(1-seg(t,5.7,6.1)));
   // hop
   const h=hopAt(t);
   $('hop').setAttribute('transform',`translate(138,346) translate(0,${h.y}) scale(${h.sx},${h.sy}) translate(-138,-346)`);
@@ -253,18 +258,18 @@ function frame(t){
   $('door').setAttribute('transform',`translate(117,0) scale(${1-o*0.92},1) skewY(${-o*8}) translate(-117,0)`);
   // dogs + bubbles
   DOGS.forEach(d=>drawDog(d,t));
-  drawBubbles(t);
+  drawNotes(t);
   // letters drop
   letters.forEach((g,i)=>{
-    const u=seg(t,11.3+i*0.14,12.3+i*0.14);
+    const u=seg(t,6.2+i*0.12,7.0+i*0.12);
     g.setAttribute('transform',`translate(0,${(1-bounce(u))*-1100})`);
     g.setAttribute('opacity',u>0?1:0);
   });
   villa.forEach((g,i)=>{
-    const u=ease(seg(t,12.6+i*0.09,13.2+i*0.09));
+    const u=ease(seg(t,7.1+i*0.07,7.6+i*0.07));
     g.setAttribute('transform',`translate(0,${(1-u)*40})`);g.setAttribute('opacity',u);
   });
-  const lu=ease(seg(t,13.0,13.8));
+  const lu=ease(seg(t,7.4,8.0));
   $('lineL').setAttribute('transform',`translate(841,0) scale(${lu},1) translate(-841,0)`);
   $('lineR').setAttribute('transform',`translate(2063,0) scale(${lu},1) translate(-2063,0)`);
 }
